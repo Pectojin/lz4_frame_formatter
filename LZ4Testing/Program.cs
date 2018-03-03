@@ -8,7 +8,7 @@ using LZ4;
 namespace LZ4Testing
 {
     /*
-     * Example C# implementation of reading a file and writing files to/from LZ4 format
+     * Example C# implementation of reading and writing files to/from LZ4 format
      * See the specification for details: https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md
      * 
      * The LZ4 frame format does not support multiple files in one LZ4 frame.
