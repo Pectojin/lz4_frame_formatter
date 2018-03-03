@@ -8,6 +8,12 @@ Or compress all the files an put them in a tarball.
 
 SharpCompress and SharpZipLib supports tar
 
+# Packages
+This software relies on two packages
+
+- lz4net
+- xxHash
+
 # Compatibility
 I've been testing the code against the LZ4 binary available on Ubuntu 16.04 by Yann Collet.
 
