@@ -243,8 +243,20 @@ namespace LZ4Testing
 
             // Parse block descriptor
             byte descriptor = input[5];
-            int blockMaxSize = (descriptor >> 4);
-
+            int blockMaxSizeFlag = (descriptor >> 4);
+            int blockMaxSize = 4 * 1024 * 1024; //4MB
+            switch (blockMaxSize)
+            {
+                case 6:
+                    blockMaxSize = 1024 * 1024;
+                    break;
+                case 5:
+                    blockMaxSize = 256 * 1024;
+                    break;
+                case 4:
+                    blockMaxSize = 64 * 1024;
+                    break;
+            }
             // Parse content size
             byte[] contentSizeArray = new byte[8];
             Array.Copy(input, 6, contentSizeArray, 0, 8);
@@ -270,11 +282,13 @@ namespace LZ4Testing
             var blocks = 0;
             // Not entirely true, we're guaranteed that the data size is equal to or smaller than contentSize
             var data = new byte[contentSize];
-            bool dataIsUncompressed = false;
-            while (true) {
+
+            while (true)
+            {
+                bool dataIsUncompressed = false;
                 // Parse the block size
                 byte[] blockSizeArray = new byte[4];
-                Array.Copy(input, 15 + dataOffset + blockOffset, blockSizeArray, 0, 4);
+                Array.Copy(input, 15 + blockOffset, blockSizeArray, 0, 4);
 
                 // break when blockSize is 0 (that's the EndMark)
                 if (BitConverter.ToInt32(blockSizeArray, 0) == 0) break;
@@ -293,31 +307,31 @@ namespace LZ4Testing
                 blockOffset += 4;
 
                 // Data
-                Array.Copy(input, 15 + dataOffset + blockOffset, data, 0 + dataOffset, blockSize);
+                if (dataIsUncompressed)
+                {
+                    // If data is uncompressed just copy the content
+                    Array.Copy(input, 15 + blockOffset, data, dataOffset, blockSize);
+                    dataOffset += blockSize;
+                }
+                else
+                {
+                    // Calculate current block max size
+                    var remain = contentSize - dataOffset;
+                    var currentBlockMaxSize = remain < blockMaxSize ? remain : blockMaxSize;
+                    // Decode the block
+                    var decodedLength = LZ4Codec.Decode(input, 15 + blockOffset, blockSize, data, dataOffset, currentBlockMaxSize);
+                    dataOffset += decodedLength;
+                }
 
                 // Block Checksum (0-4 bytes)
                 // Not implemented in LZ4 on Ubuntu, we'll just rely on content checksum
 
                 // Increment the offset
-                dataOffset += blockSize;
+                blockOffset += blockSize;
             }
-
-            Console.WriteLine("Data is compressed: " + !dataIsUncompressed);
 
             Console.WriteLine("Content size: " + dataOffset);
-
-            // If data is uncompressed just return the content
-            var lz4result = new byte[contentSize];
-            if (dataIsUncompressed)
-            {
-                lz4result = data;
-            }
-            else // Use the LZ4 Codec to decode our block
-            {
-                lz4result = LZ4Codec.Decode(data, 0, dataOffset, contentSize);
-                //lz4result = data;
-            }
-
+            
             // Parse end mark
             int endMark = BitConverter.ToInt32(input, input.Length - 8);
 
@@ -325,7 +339,7 @@ namespace LZ4Testing
             uint contentChecksum = BitConverter.ToUInt32(input, input.Length - 4);
 
             // Validate the content against the content checksum
-            uint calculatedContentChecksum = XXHash.XXH32(lz4result, 0);
+            uint calculatedContentChecksum = XXHash.XXH32(data, 0);
 
             if (contentChecksum != calculatedContentChecksum)
             {
@@ -334,7 +348,7 @@ namespace LZ4Testing
                 throw new InvalidOperationException("Content doesn't match checksum");
             }
 
-            return lz4result;
+            return data;
         }
 
         // Helper method to construct a string representation of a byte array for printing in terminal
